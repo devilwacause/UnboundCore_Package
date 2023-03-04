@@ -1,0 +1,18 @@
+{
+    "name": "devilwacause/unbound-core",
+    "description": "Unbound Core Laravel CMS",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Devilwacause\\UnboundCore\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "James Fuller"
+        }
+    ],
+    "require-dev": {
+        "orchestra/testbench": "^8.0"
+    }
+}
