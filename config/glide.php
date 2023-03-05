@@ -11,5 +11,9 @@ return [
         'q' => '80',
         'fit' => 'max'
     ],
+    'DEFAULT_THUMBNAIL' => [
+        'q' => '80',
+        'w' => '200',
+    ],
     'PRESETS' => [],
 ];

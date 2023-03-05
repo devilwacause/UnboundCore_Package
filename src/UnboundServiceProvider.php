@@ -13,8 +13,21 @@ class UnboundServiceProvider extends ServiceProvider
 
     public function boot()
     {
+        $this->loadMigrations();
+        $this->activateObservers();
         $this->registerWebRoutes();
         $this->registerApiRoutes();
+    }
+
+
+    protected function loadMigrations()
+    {
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+    }
+
+    protected function activateObservers()
+    {
+        \Devilwacause\UnboundCore\Models\Image::observe(\Devilwacause\UnboundCore\Observers\ImageObserver::class);
     }
 
     protected function registerWebRoutes()
