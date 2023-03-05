@@ -1,0 +1,15 @@
+<?php
+
+return [
+    'SOURCE' => env('GLIDE_SOURCE', storage_path('app/public')),
+    'CACHE' => env('GLIDE_CACHE', storage_path('app')),
+    'DRIVER' => env('GLIDE_DRIVER', 'gd'),
+    'BASE_PATH' => env('GLIDE_BASE_PATH', 'img'),
+    'BASE_URL' => env('GLIDE_BASE_URL', config('app.url')),
+    'DEFAULT_PARAMS' => [
+        'fm' => 'jpg',
+        'q' => '80',
+        'fit' => 'max'
+    ],
+    'PRESETS' => [],
+];
