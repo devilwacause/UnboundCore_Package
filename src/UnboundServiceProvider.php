@@ -3,7 +3,7 @@
 namespace Devilwacause\UnboundCore;
 
 use Illuminate\Support\Facades\Route;
-use \Illuminate\Support\ServiceProvider;
+use Illuminate\Support\ServiceProvider;
 class UnboundServiceProvider extends ServiceProvider
 {
     public function register()
