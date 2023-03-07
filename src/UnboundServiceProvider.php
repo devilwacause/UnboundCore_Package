@@ -3,8 +3,8 @@
 namespace Devilwacause\UnboundCore;
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\ServiceProvider;
-class UnboundServiceProvider extends ServiceProvider
+use Illuminate\Support\ServiceProvider as BaseServiceProvider;
+class UnboundServiceProvider extends BaseServiceProvider
 {
     public function register()
     {
@@ -17,12 +17,17 @@ class UnboundServiceProvider extends ServiceProvider
         $this->activateObservers();
         $this->registerWebRoutes();
         $this->registerApiRoutes();
+        $this->moveConfigs();
     }
 
 
     protected function loadMigrations()
     {
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        try {
+            $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        }catch(\Exception $e) {
+            dd($e);
+        }
     }
 
     protected function activateObservers()
@@ -33,15 +38,22 @@ class UnboundServiceProvider extends ServiceProvider
     protected function registerWebRoutes()
     {
         Route::group($this->webRouteConfiguration(), function () {
-            $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+            $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
         });
     }
 
     protected function registerApiRoutes()
     {
         Route::group($this->apiRouteConfiguration(), function () {
-            $this->loadRoutesFrom(__DIR__ .'/../routes/web.php');
+            $this->loadRoutesFrom(__DIR__ .'/../routes/api.php');
         });
+    }
+
+    protected function moveConfigs() {
+        $this->publishes([
+            __DIR__ . '/../config/config.php' => config_path('unbound.php'),
+            __DIR__ . '/../config/glide.php' => config_path('glide.php')
+        ]);
     }
 
     protected function webRouteConfiguration()

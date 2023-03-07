@@ -6,10 +6,10 @@ namespace Devilwacause\UnboundCore\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
-class Image extends Model
+class File extends Model
 {
     use HasUuids;
-    protected $table = 'unbound_images';
+    protected $table = 'unbound_files';
 
     protected $fillable = [
         'folder_id',
