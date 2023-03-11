@@ -314,6 +314,7 @@ class ImageController extends BaseController
         }
         $image->folder_id = $folder->id;
         $image->file_path = $storage_position;
+        $image->file_name = $filenameVerify;
         try {
             $image->save();
         }catch(\Illuminate\Database\QueryException $e) {
