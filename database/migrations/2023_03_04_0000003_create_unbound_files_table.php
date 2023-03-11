@@ -13,7 +13,7 @@ class CreateUnboundFilesTable extends Migration
             $table->text('file_path');
             $table->text('file_name');
             $table->string('extension')->nullable();
-            $table->unsignedInteger('title')->default('');
+            $table->string('title')->default('');
             $table->json('meta_data')->nullable();
             $table->timestamps();
             $table->index('folder_id');

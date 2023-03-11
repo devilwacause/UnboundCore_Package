@@ -12,7 +12,7 @@ class ImageObserver
         unset($image->original);
     }
     public function retrieved(Image $image) {
-        $default_thumbnail = config('unbound.DEFAULT_THUMBNAIL');
+        $default_thumbnail = config('glide.DEFAULT_THUMBNAIL');
         $thumbnailString = '?';
         $params = count($default_thumbnail);
         $string_counter = 0;
@@ -23,6 +23,16 @@ class ImageObserver
             }
         }
         $image->thumbnail = '/img/' . $image->id . $thumbnailString;
-        $image->original = '/img/' .$image->id;
+        $image_params = '?';
+        if($image->width !== null) {
+            $image_params .= "w={$image->width}";
+        }
+        if($image->height !== null) {
+            $image_params .= "w={$image->height}";
+        }
+        if($image->extension !== null) {
+            $image_params .= "fm={$image->extension}";
+        }
+        $image->original = '/img/' .$image->id . $image_params;
     }
 }
