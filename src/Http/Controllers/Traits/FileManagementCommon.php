@@ -2,6 +2,7 @@
 
 namespace Devilwacause\UnboundCore\Http\Controllers\Traits;
 
+use Symfony\Component\HttpFoundation\File\File;
 use Devilwacause\UnboundCore\Exceptions\DatabaseExceptions\DatabaseException;
 use Devilwacause\UnboundCore\Models as Model;
 use Illuminate\Support\Facades\Storage;
@@ -95,6 +96,27 @@ trait FileManagementCommon
                 throw new \Exception();
             }
         }
+    }
+
+    protected function convertB64ToFile(string $value): array
+    {
+        if (strpos($value, ';base64') !== false) {
+            [$filetype, $value] = explode(';', $value);
+            [, $extension] = explode('/', $filetype);
+            [, $value] = explode(',', $value);
+        }
+        $binaryData = base64_decode($value);
+        $tmpFile = tmpfile();
+        $this->tmpFileDescriptor = $tmpFile;
+
+        $tmpFilePath = stream_get_meta_data($tmpFile)['uri'];
+
+        file_put_contents($tmpFilePath, $binaryData);
+        $fileData = [];
+        $fileData['file'] = new File($tmpFilePath);
+        $fileData['extension'] = $extension;
+        return $fileData;
+
     }
 
     private function getFileSystem() {

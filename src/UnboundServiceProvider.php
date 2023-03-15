@@ -2,6 +2,7 @@
 
 namespace Devilwacause\UnboundCore;
 
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 class UnboundServiceProvider extends BaseServiceProvider
@@ -18,8 +19,15 @@ class UnboundServiceProvider extends BaseServiceProvider
         $this->registerWebRoutes();
         $this->registerApiRoutes();
         $this->moveConfigs();
+        $this->activateValidators();
     }
 
+    protected function activateValidators() {
+        Validator::extend(
+            'base64image',
+            '\Devilwacause\UnboundCore\Validators\Base64Validation@validateBase64Image'
+        );
+    }
 
     protected function loadMigrations()
     {
@@ -32,7 +40,8 @@ class UnboundServiceProvider extends BaseServiceProvider
 
     protected function activateObservers()
     {
-        \Devilwacause\UnboundCore\Models\Image::observe(\Devilwacause\UnboundCore\Observers\ImageObserver::class);
+        \Devilwacause\UnboundCore\Models\Image::observe(
+            \Devilwacause\UnboundCore\Observers\ImageObserver::class);
     }
 
     protected function registerWebRoutes()

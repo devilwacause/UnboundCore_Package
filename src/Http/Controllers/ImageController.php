@@ -90,8 +90,9 @@ class ImageController extends BaseController
      * @throws ImageWriteException
      */
     public function create(Request $request) {
-        $request->validate([
-            'file' => 'required|image',
+        $v = $request->validate([
+            'file' => 'required_without:file_base64|image',
+            'file_base64' => 'required_without:file|base64image',
             'filename' => 'required|string',
             'folder_id' => 'integer',
             'folder_name' => 'string|min:3',
@@ -101,7 +102,17 @@ class ImageController extends BaseController
             'meta_data' => 'json'
         ]);
         $folder = null;
-        $file = $request->file('file');
+        if($request->file('file') !== null) {
+
+            $file = $request->file('file');
+            $extension = $file->extension();
+            $name_to_check = $request['filename'] .'.'. $extension;
+        }else{
+            $tmp_file = $this->convertB64ToFile($request['file_base64']);
+            $name_to_check = $request['filename'] .'.'. $tmp_file['extension'];
+            $extension = $tmp_file['extension'];
+            $file = $tmp_file['file'];
+        }
         $folder_path = null;
         if(isset($request['folder_name'])) {
             //Check for folder.
@@ -140,7 +151,6 @@ class ImageController extends BaseController
         }
 
         //Check for file in the folder path
-        $name_to_check = $request['filename'] .'.'. $file->extension();
         $filename = $this->verifyFilename($name_to_check, $folder_path);
         try {
             $this->saveFileToDisk($folder_path, $file, $filename);
@@ -153,7 +163,7 @@ class ImageController extends BaseController
                'folder_id' => $folder !== null ? $folder->id : null,
                'file_path' => $folder_path . $filename,
                'file_name' => $filename,
-               'extension' => $file->extension(),
+               'extension' => $extension,
                'width' => isset($request['width']) ? $request['width'] : null,
                'height' => isset($request['height']) ? $request['height'] : null,
                'title' => isset($request['title']) ? $request['title'] : '',
