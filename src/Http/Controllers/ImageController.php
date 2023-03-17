@@ -436,8 +436,8 @@ class ImageController extends BaseController implements FileInterface
     }
 
     /**
-     * Requires "Accept : application/json" for validation purposes
      * Removes image from storage and database.  Clears cached images
+     * Requires "Accept : application/json" for validation purposes
      *
      * @param Request $request
      * @return int

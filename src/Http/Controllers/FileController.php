@@ -6,6 +6,9 @@ use Devilwacause\UnboundCore\Exceptions\DatabaseExceptions\DatabaseException;
 use Devilwacause\UnboundCore\Exceptions\FileExceptions\FileDatabaseException;
 use Devilwacause\UnboundCore\Exceptions\FileExceptions\FileNotFoundException;
 use Devilwacause\UnboundCore\Exceptions\FileExceptions\FileWriteException;
+use Devilwacause\UnboundCore\Exceptions\FolderExceptions\FolderNotFoundException;
+use Devilwacause\UnboundCore\Exceptions\ImageExceptions\FileDeleteException;
+use Devilwacause\UnboundCore\Http\Controllers\Interfaces\FileInterface;
 use Devilwacause\UnboundCore\Http\Controllers\Traits\FileManagementCommon;
 use Devilwacause\UnboundCore\Models\File;
 use Devilwacause\UnboundCore\Models\Folder;
@@ -13,8 +16,9 @@ use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Storage;
+use Log;
 
-class FileController extends BaseController
+class FileController extends BaseController implements FileInterface
 {
     use FileManagementCommon;
 
@@ -23,40 +27,72 @@ class FileController extends BaseController
     }
 
     /**
+     * Return file to browser
+     *
+     * @param Request $request
      * @param $fileUUID
-     * @return void
-     * @throws ImageNotFoundException
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     * @throws FileDatabaseException
+     * @throws FileNotFoundException
      */
-    public function show(Request $request, $fileUUID) {
+    public function show($fileUUID) :
+                int|\Symfony\Component\HttpFoundation\BinaryFileResponse|
+                \Symfony\Component\HttpFoundation\StreamedResponse|
+                \Symfony\Component\HttpFoundation\Response|FileNotFoundException|FileDatabaseException {
         try {
-            $image = Image::where('id', $fileUUID)->first();
+            $file = File::where('uuid', $fileUUID)->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            throw new DatabaseException($e->getMessage());
+            Log::channel('unbound_file_log')->error('Database Exception while getting file: '.$e->getMessage());
+            throw new FileDatabaseException($e->getMessage());
         }
-        if($image === null) {
-            throw new ImageNotFoundException();
+        if($file === null) {
+            Log::channel('unbound_file_log')->error('File not found: '.$fileUUID);
+            throw new FileNotFoundException();
         }else{
-            //dd($this->glide);
-            $filepath = str_replace('public', '', $image->file_path);
-            $this->glide->outputImage($filepath, $request->all());
+            return response()->file(Storage::url($file->path));
         }
     }
 
-    public function get($fileUUID) {
+    /**
+     * Return File as Download
+     *
+     * @param $fileUUID
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     * @throws FileDatabaseException
+     * @throws FileNotFoundException
+     */
+    public function download($fileUUID) :
+                int|Response|\Symfony\Component\HttpFoundation\BinaryFileResponse|
+                \Symfony\Component\HttpFoundation\StreamedResponse|
+                \Symfony\Component\HttpFoundation\Response|FileDatabaseException|FileNotFoundException {
         try {
-            $image = Image::where('id', $fileUUID)->first();
+            $file = File::where('uuid', $fileUUID)->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            throw new DatabaseException($e->getMessage());
+            Log::channel('unbound_file_log')->error('Database Exception while getting file: '.$e->getMessage());
+            throw new FileDatabaseException($e->getMessage());
         }
-        if($image === null) {
-            throw new ImageNotFoundException();
+        if($file === null) {
+            Log::channel('unbound_file_log')->error('File not found: '.$fileUUID);
+            throw new FileNotFoundException();
         }else{
-            return json_encode($image);
+            return response()->download(Storage::url($file->path));
         }
 
     }
 
-    public function create(Request $request) {
+    /**
+     * Store file and create new database record
+     * Requires "Accept : application/json" for validation purposes
+     * Saves file to storage and adds to database
+     *
+     * @param Request $request
+     * @return int
+     * @throws DatabaseException
+     * @throws FileDatabaseException
+     * @throws FileWriteException
+     */
+    public function create(Request $request) :
+                string|int|FileDatabaseException|FileWriteException {
         $request->validate([
             'file' => 'required|image',
             'filename' => 'required|string',
@@ -103,11 +139,11 @@ class FileController extends BaseController
         try {
             $this->saveFileToDisk($folder_path, $file, $filename);
         }catch(\Exception $e) {
-            throw new ImageWriteException();
+            Log::channel('unbound_file_log')->error('File Upload Error: '.$e->getMessage());
+            throw new FileWriteException();
         }
-
         try {
-            Image::create([
+            File::create([
                'folder_id' => $folder->id,
                'file_path' => $folder_path . $filename,
                'file_name' => $filename,
@@ -118,9 +154,300 @@ class FileController extends BaseController
                'meta_data' => isset($request['meta_data']) ? $request['meta_data'] : null,
             ]);
         }catch(\Exception $e) {
-            dd($e->getMessage());
-            throw new ImageDatabaseException();
+            Log::channel('unbound_file_log')->error('Database Exception Saving File: '.$e->getMessage());
+            throw new FileDatabaseException();
         }
+
+        return Response::HTTP_OK;
     }
 
+    /**
+     * Update the database data about the file
+     * Requires "Accept : application/json" for validation purposes
+     * Updates file record in the database
+     *
+     * @param Request $request
+     * @return int
+     * @throws FileDatabaseException
+     * @throws FileNotFoundException
+     */
+    public function update(Request $request) :
+                string|int|FileDatabaseException|FileNotFoundException {
+        $request->validate([
+            'file_id' => 'required|string',
+            'title' => 'string',
+            'meta_data' => 'json'
+        ]);
+        try {
+            $file = File::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e->getMessage());
+        }
+        if($file === null) {
+            Log::channel('unbound_file_log')->error('File Not Found', ['fileUUID' => $request['file_id']]);
+            throw new FileNotFoundException();
+        }else{
+            $file->title = $request['title'] ?? $file->title;
+            $file->meta_data = $request['meta_data'] ?? $file->meta_data;
+
+            try {
+                $file->save();
+            }catch(\Illuminate\Database\QueryException $e) {
+                Log::channel('unbound_file_log')->error('Database Exception Saving File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+                throw new FileDatabaseException($e->getMessage());
+            }
+        }
+        return Response::HTTP_OK;
+
+    }
+
+    /**
+     * Change the file that is stored
+     * Requires "Accept : application/json" for validation purposes
+     * If using "PUT" - must add Param ?_method=PUT to POST request - Laravel Requirement
+     *
+     * @param Request $request
+     * @return int
+     * @throws FileDatabaseException
+     * @throws FileNotFoundException
+     * @throws FileWriteException
+     */
+    public function change(Request $request) :
+                string|int|FileDatabaseException|FileNotFoundException|
+                FileWriteException {
+        $request->validate([
+            'file' => 'required|image',
+            'file_id' => 'required|string',
+            'filename' => 'string',
+            'title' => 'string',
+            'meta_data' => 'json'
+        ]);
+
+        try {
+            $cfile = File::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e);
+        }
+        if($cfile === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
+            throw new FileNotFoundException();
+        }
+        $folder = Folder::where('id',$cfile->folder_id)->first();
+        $folder_path = $this->getFolderPath($folder);
+        $file = $request->file('file');
+        $filename = '';
+        $current_file_name = $cfile->file_name;
+
+        //Move old file to tmp storage incase the new one fails to save.
+        Storage::move($folder_path . $cfile->file_name, "/files/tmp/{$cfile->file_name}");
+
+        if(isset($request['filename'])) {
+            $filename = $request['filename'] .'.' .$file->extension();
+            $filename = $this->verifyFilename($filename, $folder_path);
+        }else{
+            $filename = $current_file_name;
+        }
+        try {
+            $this->saveFileToDisk($folder_path, $file, $filename);
+        }catch(\Exception $e) {
+            //Move file back to main
+            Log::channel('unbound_file_log')->error('File Upload Error during change: '. $e->getMessage());
+            Storage::move("/files/tmp/{$cfile->file_name}", $folder_path);
+            throw new FileWriteException();
+        }
+
+        $cfile->extension = $file->extension();
+        isset($request['title']) ? $cfile->title = $request['title'] : null;
+        isset($request['meta_data']) ? $cfile->meta_data = $request['meta_data'] : null;
+
+        $file->file_name = $filename;
+        $file->file_path = $folder_path . $filename;
+
+        try {
+            $cfile->save();
+        }catch(\Illuminate\Database\QueryException $e) {
+            //Move old file BACK to correct location
+            //Move file back to main
+            Log::channel('unbound_file_log')->error('Database Error during file change: '. $e->getMessage());
+            Storage::move("/files/tmp/{$current_file_name}", $folder_path);
+            throw new FileDatabaseException($e->getMessage());
+        }
+        //Delete old image permanently
+        Storage::delete("/files/tmp/{$current_file_name}");
+
+        return Response::HTTP_OK;
+    }
+
+    /**
+     * Move file to another folder and update database record
+     * Requires "Accept : application/json" for validation purposes
+     * If using "PUT" - must add Param ?_method=PUT to POST request - Laravel Requirement
+     *
+     * @param Request $request
+     * @return int
+     * @throws FileDatabaseException
+     * @throws FileNotFoundException
+     * @throws FileWriteException
+     * @throws FolderNotFoundException
+     */
+    public function move(Request $request) :
+                string|int|FileDatabaseException|FileNotFoundException|
+                FileWriteException|FolderNotFoundException {
+        $request->validate([
+            'file_id' => 'required|string',
+            'folder_id' => 'required|integer',
+        ]);
+        try {
+            $file = File::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e->getMessage());
+        }
+        if($file === null) {
+            Log::channel('unbound_file_log')->info('File not found', ['fileUUID' => $request['file_id']]);
+            throw new FileNotFoundException();
+        }
+        try {
+            $folder = Folder::where('id', $request['folder_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new FolderNotFoundException($e->getMessage());
+        }
+        if($folder === null) {
+            Log::channel('unbound_file_log')->info('Folder not found during move', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
+            throw new FolderNotFoundException();
+        }
+        $new_file_path = $this->getFolderPath($folder);
+        $filenameVerify = $this->verifyFilename($file->file_name, $new_file_path);
+        $storage_position = $new_file_path . $filenameVerify;
+
+        try {
+            Storage::move($file->file_path, $storage_position);
+        }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Failed to move file : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new FileWriteException();
+        }
+        $file->folder_id = $folder->id;
+        $file->file_path = $storage_position;
+        $file->file_name = $filenameVerify;
+        try {
+            $file->save();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Error during file move: '. $e->getMessage());
+            throw new FileDatabaseException($e->getMessage());
+        }
+
+        return Response::HTTP_OK;
+    }
+
+    /**
+     * Copy file to another folder
+     * Requires "Accept : application/json" for validation purposes
+     * If using "PUT" - must add Param ?_method=PUT to POST request - Laravel Requirement
+     *
+     * @param Request $request
+     * @return int
+     * @throws FileDatabaseException
+     * @throws FileNotFoundException
+     * @throws FileWriteException
+     * @throws FolderNotFoundException
+     */
+    public function copy(Request $request) :
+                string|int|FileDatabaseException|FileNotFoundException|
+                FileWriteException|FolderNotFoundException {
+        $request->validate([
+            'file_id' => 'required|string',
+            'folder_id' => 'required|integer',
+        ]);
+
+        try {
+            $file = File::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e->getMessage());
+        }
+        if($file === null) {
+            Log::channel('unbound_file_log')->info('File not found', ['fileUUID' => $request['file_id']]);
+            throw new FileNotFoundException();
+        }
+        try {
+            $folder = Folder::where('id', $request['folder_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new FolderNotFoundException();
+        }
+        if($folder === null) {
+            Log::channel('unbound_file_log')->info('Folder not found during copy', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
+            throw new FolderNotFoundException();
+        }
+        $new_file_path = $this->getFolderPath($folder);
+        $filenameVerify = $this->verifyFilename($file->file_name, $new_file_path);
+        $storage_position = $new_file_path . $filenameVerify;
+
+        try {
+            Storage::copy($file->file_path, $storage_position);
+        }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Failed to copy file : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new FileWriteException();
+        }
+        $new_file = new File();
+        $new_file->folder_id = $folder->id;
+        $new_file->file_path = $new_file_path . $filenameVerify;
+        $new_file->file_name = $filenameVerify;
+        $new_file->extension = $file->extension;
+        $new_file->title = $file->title;
+        $new_file->meta_data = $file->meta_data;
+
+        try {
+            $new_file->save();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Saving File', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e->getMessage());
+        }
+
+        return Response::HTTP_OK;
+    }
+
+    /**
+     * Delete the file from the database and disk
+     * Requires "Accept : application/json" for validation purposes
+     *
+     * @param Request $request
+     * @return int
+     * @throws FileDatabaseException
+     * @throws FileDeleteException
+     * @throws FileNotFoundException
+     */
+    public function remove(Request $request) :
+                string|int|FileDatabaseException|FileDeleteException|
+                FileNotFoundException {
+        $request->validate([
+            'file_id' => 'required|string',
+        ]);
+        try {
+            $image = File::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e->getMessage());
+        }
+        if($image === null) {
+            Log::channel('unbound_file_log')->error('File Not Found', ['fileUUID' => $request['file_id']]);
+            throw new FileNotFoundException();
+        }
+        try {
+            $this->removeFileFromDisk($image->file_path, true);
+        }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Error removing file from disk', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDeleteException();
+        }
+        try {
+            $image->delete();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Deleting File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new FileDatabaseException($e->getMessage());
+        }
+        return Response::HTTP_OK;
+    }
 }
