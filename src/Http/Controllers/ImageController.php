@@ -8,6 +8,7 @@ use Devilwacause\UnboundCore\Exceptions\ImageExceptions\ImageDatabaseException;
 use Devilwacause\UnboundCore\Exceptions\ImageExceptions\ImageDeleteException;
 use Devilwacause\UnboundCore\Exceptions\ImageExceptions\ImageNotFoundException;
 use Devilwacause\UnboundCore\Exceptions\ImageExceptions\ImageWriteException;
+use Devilwacause\UnboundCore\Http\Controllers\Interfaces\FileInterface;
 use Devilwacause\UnboundCore\Http\Controllers\Traits\FileManagementCommon;
 use Devilwacause\UnboundCore\Models\Image;
 use Devilwacause\UnboundCore\Models\Folder;
@@ -17,34 +18,37 @@ use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Storage;
 use League\Glide\ServerFactory;
 use League\Glide\Server;
-use League\Glide\Responses\LaravelResponseFactory;
+use League\Glide\Responses\LaravelResponseFactory as GlideResponse;
 
-class ImageController extends BaseController
+class ImageController extends BaseController implements FileInterface
 {
     use FileManagementCommon;
+
     private \League\Glide\Server $glide;
-
-
+    private \League\Glide\Responses\LaravelResponseFactory $responseFactory;
     public function __construct() {
+        $this->responseFactory = new GlideResponse(app('request'));
         $this->glide = ServerFactory::create([
             'source' => config('glide.SOURCE'),
             'cache' => config('glide.CACHE'),
-            'response' => new LaravelResponseFactory(app('request'))
+            'response' => $this->responseFactory,
         ]);
     }
 
     /**
      * Return the image from the glide provider
-     *
+     * @param Request $request
      * @param $fileUUID
-     * @return void
+     * @return Response
+     * @throws ImageDatabaseException
      * @throws ImageNotFoundException
+     *
      */
-    public function show(Request $request, $fileUUID) {
+    public function show(Request $request, $fileUUID) : int|GlideResponse|ImageDatabaseException|ImageNotFoundException {
         try {
             $image = Image::where('id', $fileUUID)->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            throw new DatabaseException($e->getMessage());
+            throw new ImageDatabaseException($e->getMessage());
         }
         if($image === null) {
             throw new ImageNotFoundException();
@@ -52,23 +56,23 @@ class ImageController extends BaseController
             $filepath = str_replace('public', '', $image->file_path);
             $this->glide->outputImage($filepath, $request->all());
         }
+
+        return Response::HTTP_BAD_REQUEST;
     }
 
     /**
      * Get the database record for an image
-     * Requires "Accept : application/json" for validation purposes
-     * Gets image record from database
      *
      * @param $fileUUID
      * @return false|string
-     * @throws DatabaseException
+     * @throws ImageDatabaseException
      * @throws ImageNotFoundException
      */
-    public function get($fileUUID) {
+    public function get($fileUUID) : string|false|ImageDatabaseException|ImageNotFoundException {
         try {
             $image = Image::where('id', $fileUUID)->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            throw new DatabaseException($e->getMessage());
+            throw new ImageDatabaseException($e->getMessage());
         }
         if($image === null) {
             throw new ImageNotFoundException();
@@ -89,7 +93,7 @@ class ImageController extends BaseController
      * @throws ImageDatabaseException
      * @throws ImageWriteException
      */
-    public function create(Request $request) {
+    public function create(Request $request) : int|DatabaseException|ImageDatabaseException|ImageWriteException {
         $v = $request->validate([
             'file' => 'required_without:file_base64|image',
             'file_base64' => 'required_without:file|base64image',
@@ -183,11 +187,10 @@ class ImageController extends BaseController
      *
      * @param Request $request
      * @return int
-     * @throws DatabaseException
      * @throws ImageDatabaseException
      * @throws ImageNotFoundException
      */
-    public function update(Request $request) {
+    public function update(Request $request) : string|int|ImageDatabaseException|ImageNotFoundException {
         $request->validate([
             'file_id' => 'required|string',
             'title' => 'string',
@@ -198,7 +201,7 @@ class ImageController extends BaseController
         try {
             $image = Image::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            throw new DatabaseException($e);
+            throw new ImageDatabaseException($e);
         }
         if($image === null) {
             throw new ImageNotFoundException();
@@ -228,7 +231,7 @@ class ImageController extends BaseController
      * @throws ImageNotFoundException
      * @throws ImageWriteException
      */
-    public function change(Request $request) {
+    public function change(Request $request) : string|int|ImageDatabaseException|ImageNotFoundException|ImageWriteException {
         $request->validate([
             'file' => 'required|image',
             'file_id' => 'required|string',
@@ -300,7 +303,7 @@ class ImageController extends BaseController
      * @throws ImageNotFoundException
      * @throws ImageWriteException
      */
-    public function move(Request $request) {
+    public function move(Request $request) : string|int|FolderNotFoundException|ImageNotFoundException|ImageWriteException {
         $request->validate([
            'file_id' => 'required|string',
            'folder_id' => 'required|integer',
@@ -346,7 +349,7 @@ class ImageController extends BaseController
      * @throws ImageNotFoundException
      * @throws ImageWriteException
      */
-    public function copy(Request $request) {
+    public function copy(Request $request) : string|int|FolderNotFoundException|ImageNotFoundException|ImageWriteException {
         $request->validate([
             'file_id' => 'required|string',
             'folder_id' => 'required|integer',
@@ -397,7 +400,7 @@ class ImageController extends BaseController
      * @throws ImageDeleteException
      * @throws ImageNotFoundException
      */
-    public function remove(Request $request) {
+    public function remove(Request $request) : string|int|ImageDatabaseException|ImageDeleteException {
         $request->validate([
            'file_id' => 'required|string',
         ]);
