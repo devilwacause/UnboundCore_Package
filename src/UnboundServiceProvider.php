@@ -63,6 +63,10 @@ class UnboundServiceProvider extends BaseServiceProvider
             __DIR__ . '/../config/config.php' => config_path('unbound.php'),
             __DIR__ . '/../config/glide.php' => config_path('glide.php')
         ]);
+
+        $this->mergeConfigFrom(
+            __DIR__ . '/../config/logging.php', 'logging.channels'
+        );
     }
 
     protected function webRouteConfiguration()

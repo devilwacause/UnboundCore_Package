@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Storage;
 use League\Glide\ServerFactory;
 use League\Glide\Server;
 use League\Glide\Responses\LaravelResponseFactory as GlideResponse;
+use Log;
 
 class ImageController extends BaseController implements FileInterface
 {
@@ -51,6 +52,7 @@ class ImageController extends BaseController implements FileInterface
             throw new ImageDatabaseException($e->getMessage());
         }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $fileUUID]);
             throw new ImageNotFoundException();
         }else{
             $filepath = str_replace('public', '', $image->file_path);
@@ -72,9 +74,11 @@ class ImageController extends BaseController implements FileInterface
         try {
             $image = Image::where('id', $fileUUID)->first();
         }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $fileUUID, 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $fileUUID]);
             throw new ImageNotFoundException();
         }else{
             return json_encode($image);
@@ -159,6 +163,7 @@ class ImageController extends BaseController implements FileInterface
         try {
             $this->saveFileToDisk($folder_path, $file, $filename);
         }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Image Upload Error: '. $e->getMessage());
             throw new ImageWriteException();
         }
 
@@ -174,6 +179,7 @@ class ImageController extends BaseController implements FileInterface
                'meta_data' => isset($request['meta_data']) ? $request['meta_data'] : null,
             ]);
         }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
 
@@ -201,9 +207,11 @@ class ImageController extends BaseController implements FileInterface
         try {
             $image = Image::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e);
         }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
             throw new ImageNotFoundException();
         }else{
             $image->title = $request['title'];
@@ -214,6 +222,7 @@ class ImageController extends BaseController implements FileInterface
             try {
                 $image->save();
             }catch(\Illuminate\Database\QueryException $e) {
+                Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
                 throw new ImageDatabaseException($e->getMessage());
             }
         }
@@ -241,8 +250,14 @@ class ImageController extends BaseController implements FileInterface
             'height' => 'integer',
             'meta_data' => 'json'
         ]);
-        $image = Image::where('id', $request['file_id'])->first();
+        try {
+            $image = Image::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new ImageDatabaseException($e);
+        }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
             throw new ImageNotFoundException();
         }
         $folder = Folder::where('id',$image->folder_id)->first();
@@ -264,6 +279,7 @@ class ImageController extends BaseController implements FileInterface
             $this->saveFileToDisk($folder_path, $file, $filename);
         }catch(\Exception $e) {
             //Move file back to main
+            Log::channel('unbound_file_log')->error('Image Upload Error during change: '. $e->getMessage());
             Storage::move("/images/tmp/{$image->file_name}", $folder_path);
             throw new ImageWriteException();
         }
@@ -282,6 +298,7 @@ class ImageController extends BaseController implements FileInterface
         }catch(\Illuminate\Database\QueryException $e) {
             //Move old file BACK to correct location
             //Move file back to main
+            Log::channel('unbound_file_log')->error('Database Error during image change: '. $e->getMessage());
             Storage::move("/images/tmp/{$current_file_name}", $folder_path);
             throw new ImageDatabaseException($e->getMessage());
         }
@@ -308,12 +325,24 @@ class ImageController extends BaseController implements FileInterface
            'file_id' => 'required|string',
            'folder_id' => 'required|integer',
         ]);
-        $image = Image::where('id', $request['file_id'])->first();
+        try {
+            $image = Image::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new ImageDatabaseException($e->getMessage());
+        }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
             throw new ImageNotFoundException();
         }
-        $folder = Folder::where('id', $request['folder_id'])->first();
+        try {
+            $folder = Folder::where('id', $request['folder_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new ImageDatabaseException($e->getMessage());
+        }
         if($folder === null) {
+            Log::channel('unbound_file_log')->info('Folder not found during move', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
             throw new FolderNotFoundException();
         }
         $new_file_path = $this->getFolderPath($folder);
@@ -323,6 +352,7 @@ class ImageController extends BaseController implements FileInterface
         try {
             Storage::move($image->file_path, $storage_position);
         }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Failed to move image : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
             throw new ImageWriteException();
         }
         $image->folder_id = $folder->id;
@@ -331,6 +361,7 @@ class ImageController extends BaseController implements FileInterface
         try {
             $image->save();
         }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Error during image move: '. $e->getMessage());
             throw new ImageDatabaseException($e->getMessage());
         }
 
@@ -354,12 +385,24 @@ class ImageController extends BaseController implements FileInterface
             'file_id' => 'required|string',
             'folder_id' => 'required|integer',
         ]);
-        $image = Image::where('id', $request['file_id'])->first();
+        try {
+            $image = Image::where('id', $request['file_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            throw new ImageDatabaseException($e->getMessage());
+        }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
             throw new ImageNotFoundException();
         }
-        $folder = Folder::where('id', $request['folder_id'])->first();
+        try {
+            $folder = Folder::where('id', $request['folder_id'])->first();
+        }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            throw new FolderNotFoundException();
+        }
         if($folder === null) {
+            Log::channel('unbound_file_log')->info('Folder not found during copy', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
             throw new FolderNotFoundException();
         }
         $new_file_path = $this->getFolderPath($folder);
@@ -369,6 +412,7 @@ class ImageController extends BaseController implements FileInterface
         try {
             Storage::copy($image->file_path, $storage_position);
         }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Failed to copy image : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
             throw new ImageWriteException();
         }
         $new_image = new Image();
@@ -384,6 +428,7 @@ class ImageController extends BaseController implements FileInterface
         try {
             $new_image->save();
         }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
 
@@ -407,19 +452,23 @@ class ImageController extends BaseController implements FileInterface
         try {
             $image = Image::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
         if($image === null) {
+            Log::channel('unbound_file_log')->info('Image not found during removal', ['fileUUID' => $request['file_id']]);
             throw new ImageNotFoundException();
         }
         try {
             $this->removeFileFromDisk($image->file_path, true);
         }catch(\Exception $e) {
+            Log::channel('unbound_file_log')->error('Failed to remove image : ', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
             throw new ImageDeleteException();
         }
         try {
             $image->delete();
         }catch(\Illuminate\Database\QueryException $e) {
+            Log::channel('unbound_file_log')->error('Database Exception Deleting Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
         return Response::HTTP_OK;
