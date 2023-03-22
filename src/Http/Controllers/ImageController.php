@@ -102,7 +102,7 @@ class ImageController extends BaseController implements FileInterface
             'file' => 'required_without:file_base64|image',
             'file_base64' => 'required_without:file|base64image',
             'filename' => 'required|string',
-            'folder_id' => 'integer',
+            'folder_id' => 'integer|nullable',
             'folder_name' => 'string|min:3',
             'width' => 'integer',
             'height' => 'integer',
@@ -242,7 +242,8 @@ class ImageController extends BaseController implements FileInterface
      */
     public function change(Request $request) : string|int|ImageDatabaseException|ImageNotFoundException|ImageWriteException {
         $request->validate([
-            'file' => 'required|image',
+            'file' => 'required_without:file_base64|image',
+            'file_base64' => 'required_without:file|base64image',
             'file_id' => 'required|string',
             'filename' => 'string',
             'title' => 'string',
@@ -266,11 +267,22 @@ class ImageController extends BaseController implements FileInterface
         $filename = '';
         $current_file_name = $image->file_name;
 
+        if($request->file('file') !== null) {
+
+            $file = $request->file('file');
+            $extension = $file->extension();
+        }else{
+            $tmp_file = $this->convertB64ToFile($request['file_base64']);
+            $extension = $tmp_file['extension'];
+            $file = $tmp_file['file'];
+        }
+
+
         //Move old file to tmp storage incase the new one fails to save.
         Storage::move($folder_path . $image->file_name, "/images/tmp/{$image->file_name}");
 
         if(isset($request['filename'])) {
-            $filename = $request['filename'] .'.' .$file->extension();
+            $filename = $request['filename'] .'.' .$extension;
             $filename = $this->verifyFilename($filename, $folder_path);
         }else{
             $filename = $current_file_name;
@@ -284,7 +296,7 @@ class ImageController extends BaseController implements FileInterface
             throw new ImageWriteException();
         }
 
-        $image->extension = $file->extension();
+        $image->extension = $extension;
         isset($request['title']) ? $image->title = $request['title'] : null;
         isset($request['width']) ? $image->width = $request['width'] : null;
         isset($request['height']) ? $image->height = $request['height'] : null;

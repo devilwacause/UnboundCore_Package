@@ -19,6 +19,7 @@ class UnboundServiceProvider extends BaseServiceProvider
         $this->registerWebRoutes();
         $this->registerApiRoutes();
         $this->moveConfigs();
+        $this->moveTests();
         $this->activateValidators();
     }
 
@@ -67,6 +68,12 @@ class UnboundServiceProvider extends BaseServiceProvider
         $this->mergeConfigFrom(
             __DIR__ . '/../config/logging.php', 'logging.channels'
         );
+    }
+
+    protected function moveTests() {
+        $this->publishes([
+            __DIR__ . '/../tests/Feature' => public_path('../tests/Unbound')
+        ]);
     }
 
     protected function webRouteConfiguration()
