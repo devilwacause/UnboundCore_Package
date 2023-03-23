@@ -14,3 +14,8 @@ Route::prefix('image')->controller(Devilwacause\UnboundCore\Http\Controllers\Ima
     Route::post('/delete', 'remove');
     Route::get('/{fileUUID}', 'get');
 });
+
+Route::prefix('file-manager')->controller(Devilwacause\UnboundCore\Http\Controllers\FileManagerController::class)->group( function() {
+    Route::get('/', function() { echo "File-Manager";});
+    Route::get('showdir/{folder_id?}', 'showdir');
+});
