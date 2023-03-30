@@ -1,6 +1,6 @@
 <?php
 
-namespace Devilwacause\UnboundCore\Http\Controllers\Interfaces;
+namespace Devilwacause\UnboundCore\Http\Interfaces;
 
 use Illuminate\Http\Request;
 

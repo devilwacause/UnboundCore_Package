@@ -1,6 +1,6 @@
 <?php
 
-namespace Devilwacause\UnboundCore\Http\Controllers\Traits;
+namespace Devilwacause\UnboundCore\Http\Traits;
 
 use Symfony\Component\HttpFoundation\File\File;
 use Devilwacause\UnboundCore\Exceptions\DatabaseExceptions\DatabaseException;

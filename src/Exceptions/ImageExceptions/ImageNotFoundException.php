@@ -4,6 +4,7 @@ namespace Devilwacause\UnboundCore\Exceptions\ImageExceptions;
 
 use Illuminate\Http\Response;
 use Devilwacause\UnboundCore\Exceptions\UnboundCMSException;
+
 class ImageNotFoundException extends UnboundCMSException
 {
     public function status(): int
