@@ -2,12 +2,21 @@
 
 namespace Devilwacause\UnboundCore;
 
-use Devilwacause\UnboundCore\Http\Interfaces\ImageRepositoryInterface;
-use Devilwacause\UnboundCore\Http\Repositories\ImageRepository;
+use Devilwacause\UnboundCore\Http\ {
+    Interfaces\ImageRepositoryInterface,
+    Interfaces\FileRepositoryInterface,
 
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Route;
+    Repositories\ImageRepository,
+    Repositories\FileRepository
+};
+
+use Illuminate\Support\Facades\ {
+    Validator,
+    Route
+};
+
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
+
 class UnboundServiceProvider extends BaseServiceProvider
 {
     public function register()
@@ -17,10 +26,7 @@ class UnboundServiceProvider extends BaseServiceProvider
 
     public function boot()
     {
-        $this->app->bind(
-            ImageRepositoryInterface::class,
-            ImageRepository::class
-        );
+        $this->bindRepositories();
 
         $this->loadMigrations();
         $this->activateObservers();
@@ -29,6 +35,17 @@ class UnboundServiceProvider extends BaseServiceProvider
         $this->moveConfigs();
         $this->moveTests();
         $this->activateValidators();
+    }
+
+    protected function bindRepositories() {
+        $this->app->bind(
+            ImageRepositoryInterface::class,
+            ImageRepository::class
+        );
+        $this->app->bind(
+            FileRepositoryInterface::class,
+            FileRepository::class
+        );
     }
 
     protected function activateValidators() {

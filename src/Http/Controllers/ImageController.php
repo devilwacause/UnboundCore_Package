@@ -4,8 +4,7 @@ namespace Devilwacause\UnboundCore\Http\Controllers;
 
 use Devilwacause\UnboundCore\Http\{
     Interfaces\ImageRepositoryInterface,
-    Interfaces\FileInterface,
-    Traits\FileManagementCommon};
+};
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;

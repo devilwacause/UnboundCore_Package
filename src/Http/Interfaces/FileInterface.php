@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 
 interface FileInterface
 {
+    public function show(string $fileUUID);
+
+    public function get(Request $request, $fileUUID);
 
     public function create(Request $request);
 
