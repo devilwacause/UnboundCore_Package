@@ -19,11 +19,7 @@ use Devilwacause\UnboundCore\Http\ {
     Traits\FileManagementCommon,
 };
 
-use League\Glide\ {
-    ServerFactory,
-    Server,
-    Responses\LaravelResponseFactory as GlideResponse
-};
+
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -33,80 +29,11 @@ class ImageRepository implements ImageRepositoryInterface
 {
     use FileManagementCommon;
 
-    private $glide;
-    private $responseFactory;
-
-    /**
-     * ImageRepository constructor.
-     */
-    public function __construct() {
-        $this->responseFactory = new GlideResponse(app('request'));
-        $this->glide = ServerFactory::create([
-            'source' => config('glide.SOURCE'),
-            'cache' => config('glide.CACHE'),
-            'response' => $this->responseFactory,
-        ]);
+    public function findByUUID($UUID) {
+        return Image::findOrFail($UUID);
     }
-
-    /**
-     * @param Request $request
-     * @param $fileUUID
-     * @return int|GlideResponse|ImageDatabaseException|ImageNotFoundException
-     * @throws ImageDatabaseException
-     * @throws ImageNotFoundException
-     */
-    public function show(Request $request, $fileUUID) : int|GlideResponse|ImageDatabaseException|ImageNotFoundException {
-        try {
-            $image = Image::where('id', $fileUUID)->first();
-        }catch(\Illuminate\Database\QueryException $e) {
-            throw new ImageDatabaseException($e->getMessage());
-        }
-        if($image === null) {
-
-            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $fileUUID]);
-            throw new ImageNotFoundException();
-        }else{
-            $filepath = str_replace('public', '', $image->file_path);
-            try {
-              return $this->glide->outputImage($filepath, $request->all());
-            }catch(\Exception $e) {
-                Log::channel('ubound_image_log')->error('Glide failed to return file', ['fileUUID' => $fileUUID]);
-                return Response::HTTP_INTERNAL_SERVER_ERROR;
-            }
-        }
-
-    }
-
-    /**
-     * @param $fileUUID
-     * @return string|false|ImageDatabaseException|ImageNotFoundException
-     * @throws ImageDatabaseException
-     * @throws ImageNotFoundException
-     */
-    public function get($fileUUID) : string|false|ImageDatabaseException|ImageNotFoundException {
-        try {
-            $image = Image::where('id', $fileUUID)->first();
-        }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $fileUUID, 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e->getMessage());
-        }
-        if($image === null) {
-            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $fileUUID]);
-            throw new ImageNotFoundException();
-        }else{
-            return json_encode($image);
-        }
-    }
-
-    /**
-     * @param Request $request
-     * @return int|ImageDatabaseException|ImageWriteException
-     * @throws ImageDatabaseException
-     * @throws ImageWriteException
-     * @throws DatabaseException
-     */
-    public function create(Request $request) : int|ImageDatabaseException|ImageWriteException {
-        $v = $request->validate([
+    public function validateCreate(Request $request) {
+        $request->validate([
             'file' => 'required_without:file_base64|image',
             'file_base64' => 'required_without:file|base64image',
             'filename' => 'required|string',
@@ -117,80 +44,30 @@ class ImageRepository implements ImageRepositoryInterface
             'title' => 'string',
             'meta_data' => 'json'
         ]);
-        $folder = null;
-        if($request->file('file') !== null) {
+    }
 
-            $file = $request->file('file');
-            $extension = $file->extension();
-            $name_to_check = $request['filename'] .'.'. $extension;
-        }else{
-            $tmp_file = $this->convertB64ToFile($request['file_base64']);
-            $name_to_check = $request['filename'] .'.'. $tmp_file['extension'];
-            $extension = $tmp_file['extension'];
-            $file = $tmp_file['file'];
-        }
-        $folder_path = null;
-        if(isset($request['folder_name'])) {
-            //Check for folder.
-            $parent_folder = isset($request['folder_id']) ? $request['folder_id'] : null;
-
-            if($parent_folder === null) {
-                $folder = Folder::where('folder_name', $request['folder_name'])->whereNull('parent_id')->first();
-            }else{
-                $folder = Folder::where('folder_name', $request['folder_name'])->where('parent_id', $parent_folder)->first();
-            }
-
-            if($folder !== null) {
-                //Folder Already Exists!
-                //Return folder path
-                $folder_path = $this->getFolderPath($folder);
-            }else{
-                //Create new folder
-                //Return folder path
-                $data = [];
-                $data['folder_name'] = $request['folder_name'];
-                $data['parent_id'] = isset($request['folder_id']) ? $request['folder_id'] : null;
-                $folder = $this->createFolder($data);
-                $folder_path = $this->getFolderPath($folder);
-            }
-        }else{
-            if(isset($request->folder_id)) {
-                $folder = Folder::where('id', $request->folder_id)->first();
-                if($folder === null) {
-                    $folder_path = '/';
-                }else{
-                    $folder_path = $this->getFolderPath($folder);
-                }
-            }else {
-                $folder_path = '/';
-            }
-        }
-
-        //Check for file in the folder path
-        $filename = $this->verifyFilename($name_to_check, $folder_path);
-        try {
-            $this->saveFileToDisk($folder_path, $file, $filename);
-        }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Image Upload Error: '. $e->getMessage());
-            throw new ImageWriteException();
-        }
-
+    /**
+     * @param Array $data
+     * @return int|ImageDatabaseException
+     * @throws ImageDatabaseException
+     * @throws DatabaseException
+     */
+    public function create(Array $data) : int|ImageDatabaseException {
         try {
             Image::create([
-                'folder_id' => $folder !== null ? $folder->id : null,
-                'file_path' => $folder_path . $filename,
-                'file_name' => $filename,
-                'extension' => $extension,
-                'width' => isset($request['width']) ? $request['width'] : null,
-                'height' => isset($request['height']) ? $request['height'] : null,
-                'title' => isset($request['title']) ? $request['title'] : '',
-                'meta_data' => isset($request['meta_data']) ? $request['meta_data'] : null,
+                'folder_id' => $data['folder_id'],
+                'file_path' => $data['file_path'],
+                'file_name' => $data['file_name'],
+                'extension' => $data['extension'],
+                'width' => isset($data['width']) ? $data['width'] : null,
+                'height' => isset($data['height']) ? $data['height'] : null,
+                'title' => isset($data['title']) ? $data['title'] : '',
+                'meta_data' => isset($data['meta_data']) ? $data['meta_data'] : null,
             ]);
         }catch(\Exception $e) {
             Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
-
         Return Response::HTTP_CREATED;
     }
 

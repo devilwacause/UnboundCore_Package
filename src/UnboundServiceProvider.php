@@ -2,13 +2,14 @@
 
 namespace Devilwacause\UnboundCore;
 
-use Devilwacause\UnboundCore\Http\ {
+use Devilwacause\UnboundCore\Http\{
+    Interfaces\FolderRepositoryInterface,
     Interfaces\ImageRepositoryInterface,
     Interfaces\FileRepositoryInterface,
 
+    Repositories\FolderRepository,
     Repositories\ImageRepository,
-    Repositories\FileRepository
-};
+    Repositories\FileRepository};
 
 use Illuminate\Support\Facades\ {
     Validator,
@@ -45,6 +46,10 @@ class UnboundServiceProvider extends BaseServiceProvider
         $this->app->bind(
             FileRepositoryInterface::class,
             FileRepository::class
+        );
+        $this->app->bind(
+            FolderRepositoryInterface::class,
+            FolderRepository::class
         );
     }
 

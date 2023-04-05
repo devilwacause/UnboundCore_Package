@@ -2,6 +2,7 @@
 
 namespace Devilwacause\UnboundCore\Http\Traits;
 
+use Devilwacause\UnboundCore\Http\Interfaces\FolderRepositoryInterface;
 use Symfony\Component\HttpFoundation\File\File;
 use Devilwacause\UnboundCore\Exceptions\DatabaseExceptions\DatabaseException;
 use Devilwacause\UnboundCore\Models as Model;
@@ -10,9 +11,11 @@ use Illuminate\Support\Facades\Storage;
 trait FileManagementCommon
 {
     private $filesystem;
+    private $folderRepository;
 
-    public function __construct() {
+    public function __construct(FolderRepositoryInterface $folderRepository) {
         $this->filesystem = $this->getFileSystem();
+        $this->folderRepository = $folderRepository;
     }
 
     /**
@@ -20,14 +23,13 @@ trait FileManagementCommon
      * @param $folder
      * @return string
      */
-    public function getFolderPath($folder) {
+    protected function getFolderPath($folder) {
         $path = '/';
         if($folder->parent_id !== null) {
             $foundRoot = false;
             $currentParent = $folder->parent_id;
-
             do{
-                $parent = Model\Folder::where('id', $currentParent)->first();
+                $parent = $this->folderRepository->findById($currentParent);
 
                 if($parent->parent_id !== null) {
                     $path = '/' .$parent->folder_name . $path;
@@ -40,7 +42,7 @@ trait FileManagementCommon
             }while(!$foundRoot);
             return 'public' . $path . $folder->folder_name . '/';
         }else{
-            return 'public/' .$folder->folder_name . '/';
+            return 'public' . $path . $folder->folder_name . '/';
         }
     }
 
@@ -75,11 +77,7 @@ trait FileManagementCommon
     }
 
     public function saveFileToDisk($folder, $file, $filename) {
-        try {
-            Storage::putFileAs($folder, $file, $filename);
-        }catch(\Exception $e) {
-            throw new \Exception();
-        }
+        Storage::putFileAs($folder, $file, $filename);
     }
 
     public function removeFileFromDisk($filepath, $isImage = false) {

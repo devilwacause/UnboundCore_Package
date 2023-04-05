@@ -2,9 +2,7 @@
 
 namespace Devilwacause\UnboundCore\Http\Controllers;
 
-use Devilwacause\UnboundCore\Http\{
-    Interfaces\ImageRepositoryInterface,
-};
+use Devilwacause\UnboundCore\Http\{Interfaces\ImageRepositoryInterface, Services\ImageService};
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -16,8 +14,9 @@ class ImageController extends BaseController
     /**
      * @param ImageRepositoryInterface $imageRepository
      */
-    public function __construct(ImageRepositoryInterface $imageRepository) {
+    public function __construct(ImageRepositoryInterface $imageRepository, ImageService $imageService) {
         $this->imageRepository = $imageRepository;
+        $this->imageService = $imageService;
     }
 
     /**
@@ -28,7 +27,7 @@ class ImageController extends BaseController
      * @return mixed
      */
     public function show(Request $request, $fileUUID) {
-        return $this->imageRepository->show($request, $fileUUID);
+        return $this->imageService->show($request, $fileUUID);
     }
 
     /**
@@ -37,8 +36,8 @@ class ImageController extends BaseController
      * @param $fileUUID
      * @return mixed
      */
-    public function get($fileUUID) {
-        return $this->imageRepository->get($fileUUID);
+    public function get(Request $request, $fileUUID) {
+        return $this->imageService->get($request, $fileUUID);
     }
 
     /**
@@ -50,7 +49,7 @@ class ImageController extends BaseController
      * @return int
      */
     public function create(Request $request)  {
-        return $this->imageRepository->create($request);
+        return $this->imageService->create($request);
     }
 
     /**

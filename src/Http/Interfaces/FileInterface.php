@@ -6,11 +6,11 @@ use Illuminate\Http\Request;
 
 interface FileInterface
 {
-    public function show(string $fileUUID);
+    public function findByUUID(string $UUID);
 
-    public function get(Request $request, $fileUUID);
+    //public function validateCreate(Request $request);
 
-    public function create(Request $request);
+    //public function create(Request $request);
 
     public function update(Request $request);
 

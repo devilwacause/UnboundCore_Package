@@ -65,7 +65,9 @@ class FileRepository implements FileRepositoryInterface
         try {
             $file = File::where('id', $fileUUID)->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $fileUUID, 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image',
+                ['fileUUID' => $fileUUID, 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
         if($file === null) {
@@ -130,7 +132,8 @@ class FileRepository implements FileRepositoryInterface
             if($parent_folder === null) {
                 $folder = Folder::where('folder_name', $request['folder_name'])->whereNull('parent_id')->first();
             }else{
-                $folder = Folder::where('folder_name', $request['folder_name'])->where('parent_id', $parent_folder)->first();
+                $folder = Folder::where('folder_name', $request['folder_name'])
+                    ->where('parent_id', $parent_folder)->first();
             }
 
             if($folder !== null) {
@@ -193,7 +196,9 @@ class FileRepository implements FileRepositoryInterface
         try {
             $file = File::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding File',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
         if($file === null) {
@@ -206,7 +211,9 @@ class FileRepository implements FileRepositoryInterface
             try {
                 $file->save();
             }catch(\Illuminate\Database\QueryException $e) {
-                Log::channel('unbound_file_log')->error('Database Exception Saving File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+                Log::channel('unbound_file_log')->error('Database Exception Saving File',
+                    ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
                 throw new FileDatabaseException($e->getMessage());
             }
         }
@@ -233,7 +240,9 @@ class FileRepository implements FileRepositoryInterface
         try {
             $cfile = File::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding Image',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e);
         }
         if($cfile === null) {
@@ -303,21 +312,29 @@ class FileRepository implements FileRepositoryInterface
         try {
             $file = File::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding File',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
         if($file === null) {
-            Log::channel('unbound_file_log')->info('File not found', ['fileUUID' => $request['file_id']]);
+            Log::channel('unbound_file_log')->info('File not found',
+                ['fileUUID' => $request['file_id']]);
+
             throw new FileNotFoundException();
         }
         try {
             $folder = Folder::where('id', $request['folder_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding Folder',
+                ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+
             throw new FolderNotFoundException($e->getMessage());
         }
         if($folder === null) {
-            Log::channel('unbound_file_log')->info('Folder not found during move', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
+            Log::channel('unbound_file_log')->info('Folder not found during move',
+                ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
+
             throw new FolderNotFoundException();
         }
         $new_file_path = $this->getFolderPath($folder);
@@ -327,7 +344,10 @@ class FileRepository implements FileRepositoryInterface
         try {
             Storage::move($file->file_path, $storage_position);
         }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Failed to move file : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Failed to move file : ',
+                ['fileUUID' => $request['file_id'], 'folder_id' =>
+                    $request['folder_id'], 'exception' => $e->getMessage()]);
+
             throw new FileWriteException();
         }
         $file->folder_id = $folder->id;
@@ -361,7 +381,9 @@ class FileRepository implements FileRepositoryInterface
         try {
             $file = File::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding File',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
         if($file === null) {
@@ -371,11 +393,15 @@ class FileRepository implements FileRepositoryInterface
         try {
             $folder = Folder::where('id', $request['folder_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding Folder',
+                ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+
             throw new FolderNotFoundException();
         }
         if($folder === null) {
-            Log::channel('unbound_file_log')->info('Folder not found during copy', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
+            Log::channel('unbound_file_log')->info('Folder not found during copy',
+                ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
+
             throw new FolderNotFoundException();
         }
         $new_file_path = $this->getFolderPath($folder);
@@ -385,7 +411,10 @@ class FileRepository implements FileRepositoryInterface
         try {
             Storage::copy($file->file_path, $storage_position);
         }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Failed to copy file : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Failed to copy file : ',
+                ['fileUUID' => $request['file_id'], 'folder_id' =>
+                    $request['folder_id'], 'exception' => $e->getMessage()]);
+
             throw new FileWriteException();
         }
         $new_file = new File();
@@ -399,7 +428,10 @@ class FileRepository implements FileRepositoryInterface
         try {
             $new_file->save();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Saving File', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Saving File',
+                ['fileUUID' => $request['file_id'], 'folder_id' =>
+                    $request['folder_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
 
@@ -421,7 +453,9 @@ class FileRepository implements FileRepositoryInterface
         try {
             $image = File::where('id', $request['file_id'])->first();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Finding File',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
         if($image === null) {
@@ -431,13 +465,17 @@ class FileRepository implements FileRepositoryInterface
         try {
             $this->removeFileFromDisk($image->file_path, true);
         }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Error removing file from disk', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Error removing file from disk',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDeleteException();
         }
         try {
             $image->delete();
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Deleting File', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Deleting File',
+                ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
+
             throw new FileDatabaseException($e->getMessage());
         }
         return Response::HTTP_OK;
