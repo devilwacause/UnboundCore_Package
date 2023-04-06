@@ -58,10 +58,10 @@ class ImageController extends BaseController
      * Updates image record in the database
      *
      * @param Request $request
-     * @return void
+     * @return mixed
      */
     public function update(Request $request) {
-       return $this->imageRepository->update($request);
+       return $this->imageService->update($request);
     }
 
     /**
@@ -73,7 +73,7 @@ class ImageController extends BaseController
      * @return mixed
      */
     public function change(Request $request) {
-        return $this->imageRepository->change($request);
+        return $this->imageService->change($request);
     }
 
     /**
@@ -85,7 +85,7 @@ class ImageController extends BaseController
      * @return mixed
      */
     public function move(Request $request) {
-        return $this->imageRepository->move($request);
+        return $this->imageService->move($request);
     }
 
     /**
@@ -97,7 +97,7 @@ class ImageController extends BaseController
      * @return mixed
      */
     public function copy(Request $request) {
-        return $this->imageRepository->copy($request);
+        return $this->imageService->copy($request);
     }
 
     /**
@@ -108,6 +108,6 @@ class ImageController extends BaseController
      * @return mixed
      */
     public function remove(Request $request)  {
-        return $this->imageRepository->remove($request);
+        return $this->imageService->remove($request);
     }
 }

@@ -46,24 +46,6 @@ trait FileManagementCommon
         }
     }
 
-    /**
-     * Create Folder in Database
-     * @param array $data
-     * @return mixed
-     */
-    public function createFolder(array $data) {
-        //Create new folder in database
-        try {
-            $folder = Model\Folder::create([
-                'parent_id' => $data['parent_id'],
-                'folder_name' => $data['folder_name']
-            ]);
-        }catch(\Exception $e) {
-            throw new DatabaseException($e->getMessage());
-        }
-        return $folder;
-    }
-
     public function verifyFilename($filename, $folder) {
         if(Storage::fileExists($folder . $filename)) {
             $filename_parts = explode('.', $filename);
@@ -78,6 +60,41 @@ trait FileManagementCommon
 
     public function saveFileToDisk($folder, $file, $filename) {
         Storage::putFileAs($folder, $file, $filename);
+    }
+
+    public function moveFile($currentPath, $newPath) {
+        Storage::move($currentPath, $newPath);
+    }
+
+    public function moveFileToTemp($folder_path, $file, $type) {
+        if($type === 'image') {
+            Storage::move($folder_path . $file->file_name, "/images/tmp/{$file->file_name}");
+        }
+        if($type === 'file') {
+            Storage::move($folder_path . $file->file_name, "/files/tmp/{$file->file_name}");
+        }
+    }
+
+    public function copyFileToFolder($new_file_path, $current_file_path) {
+        Storage::copy($current_file_path, $new_file_path);
+    }
+
+    public function restoreFromTemp($folder_path, $file, $type) {
+        if($type === 'image') {
+            Storage::move("/images/tmp/{$file->file_name}", $folder_path . $file->file_name);
+        }
+        if($type === 'file') {
+            Storage::move("/files/tmp/{$file->file_name}", $folder_path . $file->file_name);
+        }
+    }
+
+    public function removeFromTemp($filename, $type) {
+        if($type === 'image') {
+            Storage::delete("/images/tmp/{$filename}");
+        }
+        if($type === 'file') {
+            Storage::delete("/files/tmp/{$filename}");
+        }
     }
 
     public function removeFileFromDisk($filepath, $isImage = false) {

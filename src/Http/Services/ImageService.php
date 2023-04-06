@@ -28,7 +28,8 @@ class ImageService
     private $folderRepository;
 
     /**
-     * ImageRepository constructor.
+     * @param ImageRepositoryInterface $imageRepository
+     * @param FolderRepositoryInterface $folderRepository
      */
     public function __construct(ImageRepositoryInterface $imageRepository, FolderRepositoryInterface $folderRepository) {
         $this->imageRepository = $imageRepository;
@@ -144,5 +145,199 @@ class ImageService
         return $this->imageRepository->create($data);
     }
 
+    public function update(Request $request) {
+        $data = $request->all();
 
+        //Validate the request
+        try {
+            $this->imageRepository->validateUpdate($request);
+        }catch(\Exception $e) {
+            return $e->getMessage();
+        }
+        try {
+            $image = $this->imageRepository->findByUUID($request['file_id']);
+        }catch(\Exception $e) {
+            return $e->getMessage();
+        }
+
+        return $this->imageRepository->update($data);
+    }
+
+    public function change(Request $request) {
+        $data = $request->all();
+        //Validate the request
+        try {
+            $this->imageRepository->validateChange($request);
+        }catch(\Exception $e) {
+            return $e->getMessage();
+        }
+        try {
+            $image = $this->imageRepository->findByUUID($request['file_id']);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        $new_filename = '';
+        $current_file_name = $image->file_name;
+        //Get Current Folder
+        try {
+            $folder = $this->folderRepository->findById($image->folder_id);
+        }catch(\Exception $e) {
+            return $e->getMessage();
+        }
+        //Build Folder Path
+        if($folder === null) {
+            $folder_path = 'public/';
+        }else{
+            $folder_path = $this->getFolderPath($folder);
+        }
+        //Get File
+        if($request->file('file') !== null) {
+            //Normal File
+            $file = $request->file('file');
+            $extension = $file->extension();
+        }else{
+            //Base 64 File
+            $tmp_file = $this->convertB64ToFile($request['file_base64']);
+            $extension = $tmp_file['extension'];
+            $file = $tmp_file['file'];
+        }
+
+        //Important - we want to MOVE the old file first.  In the event something goes awry, we restore old
+        $this->moveFileToTemp($folder_path, $image, 'image');
+        //Check file name to prevent overwrite of other files
+        if(isset($request['filename'])) {
+            $new_filename = $request['filename'] . '.' .$extension;
+            $filename = $this->verifyFilename($new_filename, $folder_path);
+        }else{
+            $new_filename = $current_file_name;
+        }
+
+        //Save new file to disk or restore old on failure
+        try {
+            $this->saveFileToDisk($folder_path, $file, $new_filename);
+        }catch(\Exception $e) {
+            $this->restoreFromTemp($folder_path, $image, 'image');
+            Log::channel('unbound_file_log')->error('Image Upload Error during change: '. $e->getMessage());
+            throw new ImageWriteException();
+        }
+
+        $data['extension'] = $extension;
+        $data['folder_path'] = $folder_path;
+        $data['filename'] = $new_filename;
+        isset($request['title']) ? $data['title'] = $request['title'] : $image->title;
+        isset($request['width']) ? $data['width'] = $request['width'] : $image->width;
+        isset($request['height']) ? $data['height'] = $request['height'] : $image->height;
+        isset($request['meta_data']) ? $data['meta_data'] = $request['meta_data'] : $image->meta_data;
+
+        try {
+            $this->imageRepository->change($data);
+        }catch(\Exception $e) {
+            //Failed to update db record
+            $this->restoreFromTemp($folder_path, $image, 'image');
+            Log::channel('unbound_file_log')->error('Image Database Error during change: '. $e->getMessage());
+            throw new ImageDatabaseException();
+        }
+
+        //Remove Temp File
+        $this->removeFromTemp($current_file_name, 'image');
+
+        return Response::HTTP_OK;
+    }
+
+    public function move(Request $request) {
+        $data = $request->all();
+        //Validate the request
+        try {
+            $this->imageRepository->validateMoveCopy($request);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        try {
+            $image = $this->imageRepository->findByUUID($request['file_id']);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        try {
+            $folder = $this->folderRepository->findById($request['folder_id']);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+
+        $new_folder_path = $this->getFolderPath($folder);
+        $filename = $this->verifyFilename($image->file_name, $new_folder_path);
+        $newStorage = $new_folder_path . $filename;
+
+        try {
+            $this->moveFile($image->file_path, $newStorage);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+
+        $data['folder_id'] = $folder->id;
+        $data['file_path'] = $newStorage;
+        $data['filename'] = $filename;
+
+        return $this->imageRepository->move($data);
+    }
+    public function copy(Request $request) {
+        $data = $request->all();
+        //Validate the request
+        try {
+            $this->imageRepository->validateMoveCopy($request);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        //Get image
+        try {
+            $image = $this->imageRepository->findByUUID($request['file_id']);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        //Get folder
+        try {
+            $folder = $this->folderRepository->findById($request['folder_id']);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        $new_file_path = $this->getFolderPath($folder);
+        $filename = $this->verifyFilename($image->file_name, $new_file_path);
+        $fullpath = $new_file_path . $filename;
+
+        //Copy file to new location
+        try {
+            $this->copyFileToFolder($fullpath, $image->file_path);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+
+        //Copy data from current image for the new database record
+        $data['folder_id'] = $folder->id;
+        $data['file_path'] = $fullpath;
+        $data['file_name'] = $filename;
+        $data['extension'] = $image->extension;
+        $data['title'] = $image->title;
+        $data['width'] = $image->width;
+        $data['height'] = $image->height;
+        $data['meta_data'] = $image->meta_data;
+
+        //Create new file in database
+        return $this->imageRepository->copy($data);
+    }
+    public function remove(Request $request) {
+        $data = $request->all();
+        //Validate the request
+        try {
+            $this->imageRepository->validateRemove($request);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+        //Get Image
+        try {
+            $image = $this->imageRepository->findByUUID($request['file_id']);
+        }catch(\Exception $e) {
+            dd($e->getMessage());
+        }
+
+        return $this->imageRepository->remove($data);
+    }
 }

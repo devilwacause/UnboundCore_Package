@@ -32,6 +32,7 @@ class ImageRepository implements ImageRepositoryInterface
     public function findByUUID($UUID) {
         return Image::findOrFail($UUID);
     }
+
     public function validateCreate(Request $request) {
         $request->validate([
             'file' => 'required_without:file_base64|image',
@@ -43,6 +44,42 @@ class ImageRepository implements ImageRepositoryInterface
             'height' => 'integer',
             'title' => 'string',
             'meta_data' => 'json'
+        ]);
+    }
+
+    public function validateUpdate(Request $request) {
+        $request->validate([
+            'file_id' => 'required|string',
+            'title' => 'string',
+            'width' => 'integer',
+            'height' => 'integer',
+            'meta_data' => 'json'
+        ]);
+    }
+
+    public function validateChange(Request $request) {
+        $request->validate([
+            'file' => 'required_without:file_base64|image',
+            'file_base64' => 'required_without:file|base64image',
+            'file_id' => 'required|string',
+            'filename' => 'string',
+            'title' => 'string',
+            'width' => 'integer',
+            'height' => 'integer',
+            'meta_data' => 'json'
+        ]);
+    }
+
+    public function validateMoveCopy(Request $request) {
+        $request->validate([
+            'file_id' => 'required|string',
+            'folder_id' => 'required|integer',
+        ]);
+    }
+
+    public function validateRemove(Request $request) {
+        $request->validate([
+            'file_id' => 'required|string',
         ]);
     }
 
@@ -72,244 +109,89 @@ class ImageRepository implements ImageRepositoryInterface
     }
 
     /**
-     * @param Request $request
-     * @return string|int|ImageDatabaseException|ImageNotFoundException
+     * @param array $data
+     * @return int|ImageDatabaseException
      * @throws ImageDatabaseException
-     * @throws ImageNotFoundException
      */
-    public function update(Request $request) : string|int|ImageDatabaseException|ImageNotFoundException  {
-        $request->validate([
-            'file_id' => 'required|string',
-            'title' => 'string',
-            'width' => 'integer',
-            'height' => 'integer',
-            'meta_data' => 'json'
-        ]);
+    public function update(Array $data) : int|ImageDatabaseException  {
         try {
-            $image = Image::where('id', $request['file_id'])->first();
+            Image::where('id', $data['file_id'])->update([
+                'title' => $data['title'],
+                'width' => $data['width'],
+                'height' => $data['height'],
+                'meta_data' => $data['meta_data'],
+            ]);
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e);
-        }
-        if($image === null) {
-            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
-            throw new ImageNotFoundException();
-        }else{
-            $image->title = $request['title'];
-            $image->width = $request['width'];
-            $image->height = $request['height'];
-            $image->meta_data = $request['meta_data'];
+            Log::channel('unbound_file_log')->error('Database Exception Updating Image',
+                ['fileUUID' => $data['file_id'], 'exception' => $e->getMessage()]);
 
-            try {
-                $image->save();
-            }catch(\Illuminate\Database\QueryException $e) {
-                Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-                throw new ImageDatabaseException($e->getMessage());
-            }
+            throw new ImageDatabaseException($e->getMessage());
         }
         return Response::HTTP_OK;
     }
 
     /**
-     * @param Request $request
-     * @return string|int|ImageDatabaseException|ImageNotFoundException|ImageWriteException
+     * @param array $data
+     * @return int|ImageDatabaseException
      * @throws ImageDatabaseException
-     * @throws ImageNotFoundException
-     * @throws ImageWriteException
      */
-    public function change(Request $request) : string|int|ImageDatabaseException|ImageNotFoundException|ImageWriteException  {
-        $request->validate([
-            'file' => 'required_without:file_base64|image',
-            'file_base64' => 'required_without:file|base64image',
-            'file_id' => 'required|string',
-            'filename' => 'string',
-            'title' => 'string',
-            'width' => 'integer',
-            'height' => 'integer',
-            'meta_data' => 'json'
-        ]);
+    public function change(Array $data) : int|ImageDatabaseException {
         try {
-            $image = Image::where('id', $request['file_id'])->first();
+            Image::where('id', $data['file_id'])->update([
+                'file_name' => $data['filename'],
+                'file_path' => $data['folder_path'] . $data['filename'],
+                'extension' => $data['extension'],
+                'title' => $data['title'],
+                'width' => $data['width'],
+                'height' => $data['height'],
+                'meta_data' => $data['meta_data']
+            ]);
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e);
-        }
-        if($image === null) {
-            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
-            throw new ImageNotFoundException();
-        }
-        $folder = Folder::where('id',$image->folder_id)->first();
-        $folder_path = $this->getFolderPath($folder);
-        $file = $request->file('file');
-        $filename = '';
-        $current_file_name = $image->file_name;
-
-        if($request->file('file') !== null) {
-
-            $file = $request->file('file');
-            $extension = $file->extension();
-        }else{
-            $tmp_file = $this->convertB64ToFile($request['file_base64']);
-            $extension = $tmp_file['extension'];
-            $file = $tmp_file['file'];
-        }
-
-
-        //Move old file to tmp storage incase the new one fails to save.
-        Storage::move($folder_path . $image->file_name, "/images/tmp/{$image->file_name}");
-
-        if(isset($request['filename'])) {
-            $filename = $request['filename'] .'.' .$extension;
-            $filename = $this->verifyFilename($filename, $folder_path);
-        }else{
-            $filename = $current_file_name;
-        }
-        try {
-            $this->saveFileToDisk($folder_path, $file, $filename);
-        }catch(\Exception $e) {
-            //Move file back to main
-            Log::channel('unbound_file_log')->error('Image Upload Error during change: '. $e->getMessage());
-            Storage::move("/images/tmp/{$image->file_name}", $folder_path);
-            throw new ImageWriteException();
-        }
-
-        $image->extension = $extension;
-        isset($request['title']) ? $image->title = $request['title'] : null;
-        isset($request['width']) ? $image->width = $request['width'] : null;
-        isset($request['height']) ? $image->height = $request['height'] : null;
-        isset($request['meta_data']) ? $image->meta_data = $request['meta_data'] : null;
-
-        $image->file_name = $filename;
-        $image->file_path = $folder_path . $filename;
-
-        try {
-            $image->save();
-        }catch(\Illuminate\Database\QueryException $e) {
-            //Move old file BACK to correct location
-            //Move file back to main
             Log::channel('unbound_file_log')->error('Database Error during image change: '. $e->getMessage());
-            Storage::move("/images/tmp/{$current_file_name}", $folder_path);
             throw new ImageDatabaseException($e->getMessage());
         }
-        //Delete old image permanently
-        Storage::delete("/images/tmp/{$current_file_name}");
-
         return Response::HTTP_OK;
     }
 
     /**
-     * @param Request $request
-     * @return string|int|FolderNotFoundException|ImageNotFoundException|ImageWriteException
-     * @throws FolderNotFoundException
+     * @param array $data
+     * @return int|ImageDatabaseException
      * @throws ImageDatabaseException
-     * @throws ImageNotFoundException
-     * @throws ImageWriteException
      */
-    public function move(Request $request) : string|int|FolderNotFoundException|ImageNotFoundException|ImageWriteException  {
-        $request->validate([
-            'file_id' => 'required|string',
-            'folder_id' => 'required|integer',
-        ]);
+    public function move(Array $data) : int|ImageDatabaseException  {
         try {
-            $image = Image::where('id', $request['file_id'])->first();
-        }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e->getMessage());
-        }
-        if($image === null) {
-            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
-            throw new ImageNotFoundException();
-        }
-        try {
-            $folder = Folder::where('id', $request['folder_id'])->first();
-        }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e->getMessage());
-        }
-        if($folder === null) {
-            Log::channel('unbound_file_log')->info('Folder not found during move', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
-            throw new FolderNotFoundException();
-        }
-        $new_file_path = $this->getFolderPath($folder);
-        $filenameVerify = $this->verifyFilename($image->file_name, $new_file_path);
-        $storage_position = $new_file_path . $filenameVerify;
-
-        try {
-            Storage::move($image->file_path, $storage_position);
-        }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Failed to move image : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
-            throw new ImageWriteException();
-        }
-        $image->folder_id = $folder->id;
-        $image->file_path = $storage_position;
-        $image->file_name = $filenameVerify;
-        try {
-            $image->save();
+            Image::where('id', $data['file_id'])->update([
+                'folder_id' => $data['folder_id'],
+                'file_path' => $data['file_path'],
+                'file_name' => $data['filename'],
+            ]);
         }catch(\Illuminate\Database\QueryException $e) {
             Log::channel('unbound_file_log')->error('Database Error during image move: '. $e->getMessage());
             throw new ImageDatabaseException($e->getMessage());
         }
-
         return Response::HTTP_OK;
     }
 
     /**
-     * @param Request $request
-     * @return string|int|FolderNotFoundException|ImageNotFoundException|ImageWriteException
-     * @throws FolderNotFoundException
+     * @param array $data
+     * @return int|ImageDatabaseException
      * @throws ImageDatabaseException
-     * @throws ImageNotFoundException
-     * @throws ImageWriteException
      */
-    public function copy(Request $request) : string|int|FolderNotFoundException|ImageNotFoundException|ImageWriteException {
-        $request->validate([
-            'file_id' => 'required|string',
-            'folder_id' => 'required|integer',
-        ]);
+    public function copy(Array $data) : int|ImageDatabaseException {
         try {
-            $image = Image::where('id', $request['file_id'])->first();
+            Image::create([
+                'folder_id' => $data['folder_id'],
+                'file_path' => $data['file_path'],
+                'file_name' => $data['file_name'],
+                'extension' => $data['extension'],
+                'width' => $data['width'],
+                'height' => $data['height'],
+                'title' => $data['title'],
+                'meta_data' => $data['meta_data'],
+            ]);
         }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e->getMessage());
-        }
-        if($image === null) {
-            Log::channel('unbound_file_log')->info('Image not found', ['fileUUID' => $request['file_id']]);
-            throw new ImageNotFoundException();
-        }
-        try {
-            $folder = Folder::where('id', $request['folder_id'])->first();
-        }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Folder', ['folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
-            throw new FolderNotFoundException();
-        }
-        if($folder === null) {
-            Log::channel('unbound_file_log')->info('Folder not found during copy', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id']]);
-            throw new FolderNotFoundException();
-        }
-        $new_file_path = $this->getFolderPath($folder);
-        $filenameVerify = $this->verifyFilename($image->file_name, $new_file_path);
-        $storage_position = $new_file_path . $filenameVerify;
-
-        try {
-            Storage::copy($image->file_path, $storage_position);
-        }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Failed to copy image : ', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
-            throw new ImageWriteException();
-        }
-        $new_image = new Image();
-        $new_image->folder_id = $folder->id;
-        $new_image->file_path = $new_file_path . $filenameVerify;
-        $new_image->file_name = $filenameVerify;
-        $new_image->extension = $image->extension;
-        $new_image->title = $image->title;
-        $new_image->width = $image->width;
-        $new_image->height = $image->height;
-        $new_image->meta_data = $image->meta_data;
-
-        try {
-            $new_image->save();
-        }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['fileUUID' => $request['file_id'], 'folder_id' => $request['folder_id'], 'exception' => $e->getMessage()]);
+            Log::channel('unbound_file_log')->error('Database Exception Saving Image', ['fileUUID' => $data['file_id'],
+                'folder_id' => $data['folder_id'], 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
         }
 
@@ -323,28 +205,9 @@ class ImageRepository implements ImageRepositoryInterface
      * @throws ImageDeleteException
      * @throws ImageNotFoundException
      */
-    public function remove (Request $request) : string|int|ImageDatabaseException|ImageDeleteException {
-        $request->validate([
-            'file_id' => 'required|string',
-        ]);
+    public function remove (Array $data) : string|int|ImageDatabaseException|ImageDeleteException {
         try {
-            $image = Image::where('id', $request['file_id'])->first();
-        }catch(\Illuminate\Database\QueryException $e) {
-            Log::channel('unbound_file_log')->error('Database Exception Finding Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDatabaseException($e->getMessage());
-        }
-        if($image === null) {
-            Log::channel('unbound_file_log')->info('Image not found during removal', ['fileUUID' => $request['file_id']]);
-            throw new ImageNotFoundException();
-        }
-        try {
-            $this->removeFileFromDisk($image->file_path, true);
-        }catch(\Exception $e) {
-            Log::channel('unbound_file_log')->error('Failed to remove image : ', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
-            throw new ImageDeleteException();
-        }
-        try {
-            $image->delete();
+            Image::where('id', $data['file_id'])->delete();
         }catch(\Illuminate\Database\QueryException $e) {
             Log::channel('unbound_file_log')->error('Database Exception Deleting Image', ['fileUUID' => $request['file_id'], 'exception' => $e->getMessage()]);
             throw new ImageDatabaseException($e->getMessage());
